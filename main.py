@@ -59,6 +59,8 @@ def stream_transcribe(stream, new_chunk, output, prev_output):
 
         if stream is None:
             stream = []
+
+        # split stream if it is too long
         if len(stream)>5:
             stream = []
             prev_output +=  output+"\n" 
