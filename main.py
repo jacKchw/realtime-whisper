@@ -40,7 +40,7 @@ pipe = pipeline(
 
 
 @spaces.GPU
-def stream_transcribe(stream, new_chunk, prev_transcription):
+def stream_transcribe(stream, new_chunk, output, prev_output):
     start_time = time.time()
     try:
         sr, y = new_chunk
@@ -52,15 +52,17 @@ def stream_transcribe(stream, new_chunk, prev_transcription):
         # skip silent audio input
         cleanedChunk = y[y != 0]
         if len(cleanedChunk) == 0:
-            return stream, prev_transcription, f"{0:.2f}"
+            return stream, output, prev_output, f"{0:.2f}"
 
         y = y.astype(np.float32)
         y /= np.max(np.abs(y))
 
         if stream is None:
             stream = []
-        if len(stream) > 10:
-            stream.pop(0)
+        if len(stream)>5:
+            stream = []
+            prev_output +=  output+"\n" 
+
         stream.append(y)
 
         transcription = pipe({"sampling_rate": sr, "raw": np.concatenate(stream)})[
@@ -69,7 +71,7 @@ def stream_transcribe(stream, new_chunk, prev_transcription):
         end_time = time.time()
         latency = end_time - start_time
 
-        return stream, transcription, f"{latency:.2f}"
+        return stream, transcription, prev_output, f"{latency:.2f}"
 
     except Exception as e:
         print(f"Error during Transcription: {e}")
@@ -92,6 +94,7 @@ with gr.Blocks() as microphone:
         )
         with gr.Row():
             input_audio_microphone = gr.Audio(streaming=True)
+            prev_output = gr.Textbox(label="log", value="")
             output = gr.Textbox(label="Transcription", value="")
             latency_textbox = gr.Textbox(
                 label="Latency (seconds)", value="0.0", scale=0
@@ -101,13 +104,13 @@ with gr.Blocks() as microphone:
         state = gr.State()
         input_audio_microphone.stream(
             stream_transcribe,
-            [state, input_audio_microphone, output],
-            [state, output, latency_textbox],
+            [state, input_audio_microphone, output, prev_output],
+            [state, output,prev_output, latency_textbox],
             time_limit=30,
             stream_every=2,
             concurrency_limit=None,
         )
-        clear_button.click(clear_state, outputs=[state]).then(clear, outputs=[output])
+        clear_button.click(clear_state, outputs=[state]).then(clear, outputs=[output]).then(clear, outputs=[prev_output])
 
 
 with gr.Blocks(theme=gr.themes.Ocean()) as demo:
